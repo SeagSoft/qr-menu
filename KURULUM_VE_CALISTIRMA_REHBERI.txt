@@ -1,0 +1,57 @@
+================================================================================
+           GOURMET QR RESTAURANT PLATFORM - KURULUM VE ÇALIŞTIRMA REHBERİ
+================================================================================
+
+Bu proje Spring Boot 3.3 (Java 21) backend ve Next.js 16 (Node.js) frontend 
+teknolojileri ile geliştirilmiş çok kiracılı (multi-tenant) dijital QR menü, 
+mutfak ekranı (KDS) ve garson çağrı sistemidir.
+
+--------------------------------------------------------------------------------
+1. GEREKLİ YAZILIMLAR VE İNDİRME BAĞLANTILARI
+--------------------------------------------------------------------------------
+
+Projenin bilgisayarınızda çalışması için aşağıdaki iki uygulamanın kurulu olması gereklidir:
+
+1) Java JDK 21 (Backend için):
+   - İndirme Adresi: https://adoptium.net/temurin/releases/?version=21
+   - Kurulum Notu: Yüklerken "Set JAVA_HOME variable" seçeneğini işaretleyin.
+
+2) Node.js (v18.x veya v20.x+) (Frontend için):
+   - İndirme Adresi: https://nodejs.org/ (LTS sürümünü indirin)
+   - Kurulum Notu: Varsayılan ayarlarla kurmanız yeterlidir.
+
+--------------------------------------------------------------------------------
+2. İLK DEFA ÇALIŞTIRMA (HIZLI BAŞLATMA)
+--------------------------------------------------------------------------------
+
+A) Otomatik Başlatma (Tavsiye Edilen):
+   - Klasör içindeki "start-all.bat" dosyasına çift tıklayın. 
+   - İki ayrı siyah pencere açılacak, biri backend'i diğeri frontend'i başlatacaktır.
+
+B) Manuel Başlatma:
+
+   1. Backend (Spring Boot Sunucusu):
+      - "start-backend.bat" dosyasına çift tıklayın.
+      - Veya komut satırından `backend` klasörüne girip `mvnw spring-boot:run` komutunu çalıştırın.
+      - Sunucu adresi: http://localhost:8080
+
+   2. Frontend (Next.js Arayüzü):
+      - "start-frontend.bat" dosyasına çift tıklayın.
+      - Veya komut satırından `frontend` klasörüne girip `npm install` ve ardından `npm run dev` çalıştırın.
+      - Sunucu adresi: http://localhost:3000
+
+--------------------------------------------------------------------------------
+3. UYGULAMA SAYFALARI VE TEST ADRESLERİ
+--------------------------------------------------------------------------------
+
+- Ana Sayfa & Demo Masalar : http://localhost:3000
+- Müşteri QR Menü (Masa 1)  : http://localhost:3000/t/tbl-001
+- Mutfak Ekranı (KDS)      : http://localhost:3000/kitchen
+- Yönetici Paneli          : http://localhost:3000/admin
+- Personel Sipariş Takibi  : http://localhost:3000/staff/orders
+- Personel Masa Düzeni     : http://localhost:3000/staff/tables
+- Personel Giriş Kapısı    : http://localhost:3000/staff/login
+- Swagger API Dokümantasyonu: http://localhost:8080/swagger-ui.html
+
+--------------------------------------------------------------------------------
+İyi çalışmalar dileriz!
