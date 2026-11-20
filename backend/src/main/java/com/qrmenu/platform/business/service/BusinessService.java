@@ -8,16 +8,19 @@ import com.qrmenu.platform.business.mapper.BusinessMapper;
 import com.qrmenu.platform.business.repository.BusinessRepository;
 import com.qrmenu.platform.common.exception.BusinessRuleException;
 import com.qrmenu.platform.common.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class BusinessService {
 
     private final BusinessRepository businessRepository;
     private final BusinessMapper businessMapper;
+
+    public BusinessService(BusinessRepository businessRepository, BusinessMapper businessMapper) {
+        this.businessRepository = businessRepository;
+        this.businessMapper = businessMapper;
+    }
 
     @Transactional(readOnly = true)
     public BusinessDto getById(Long id) {

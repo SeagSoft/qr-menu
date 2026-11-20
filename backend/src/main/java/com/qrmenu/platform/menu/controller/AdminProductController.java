@@ -5,7 +5,6 @@ import com.qrmenu.platform.menu.dto.ProductDto;
 import com.qrmenu.platform.menu.dto.UpdateProductRequest;
 import com.qrmenu.platform.menu.service.MenuService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +13,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/products")
-@RequiredArgsConstructor
 public class AdminProductController {
 
     private final MenuService menuService;
+
+    public AdminProductController(MenuService menuService) {
+        this.menuService = menuService;
+    }
 
     @GetMapping("/category/{categoryId}")
     public ResponseEntity<List<ProductDto>> getByCategoryId(@PathVariable Long categoryId) {

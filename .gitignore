@@ -38,3 +38,10 @@ docker-data/
 # === Build ===
 dist/
 build/
+target/
+node_modules/
+.next/
+
+# === Archives & Debug Artifacts ===
+*.zip
+debug-bundle.txt

@@ -5,7 +5,6 @@ import com.qrmenu.platform.menu.dto.MenuCategoryDto;
 import com.qrmenu.platform.menu.dto.UpdateCategoryRequest;
 import com.qrmenu.platform.menu.service.MenuService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +13,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/categories")
-@RequiredArgsConstructor
 public class AdminCategoryController {
 
     private final MenuService menuService;
+
+    public AdminCategoryController(MenuService menuService) {
+        this.menuService = menuService;
+    }
 
     @GetMapping("/business/{businessId}")
     public ResponseEntity<List<MenuCategoryDto>> getByBusinessId(@PathVariable Long businessId) {

@@ -3,7 +3,6 @@ package com.qrmenu.platform.ordering.controller;
 import com.qrmenu.platform.ordering.dto.OrderResponse;
 import com.qrmenu.platform.ordering.entity.OrderStatus;
 import com.qrmenu.platform.ordering.service.OrderService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,14 +10,23 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/staff/branches/{branchId}/orders")
-@RequiredArgsConstructor
 public class StaffOrderController {
 
     private final OrderService orderService;
 
+    public StaffOrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getActiveOrders(@PathVariable Long branchId) {
         List<OrderResponse> orders = orderService.getActiveOrdersForBranch(branchId);
+        return ResponseEntity.ok(orders);
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<OrderResponse>> getOrderHistory(@PathVariable Long branchId) {
+        List<OrderResponse> orders = orderService.getAllOrdersForBranch(branchId);
         return ResponseEntity.ok(orders);
     }
 

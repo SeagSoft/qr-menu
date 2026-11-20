@@ -1,17 +1,13 @@
 package com.qrmenu.platform.auth.model;
 
 import com.qrmenu.platform.auth.entity.StaffUser;
-import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-
 import java.util.Collection;
 import java.util.Collections;
 
-@Getter
 public class StaffPrincipal implements UserDetails {
-
     private final Long id;
     private final Long businessId;
     private final Long branchId;
@@ -63,5 +59,25 @@ public class StaffPrincipal implements UserDetails {
     @Override
     public boolean isEnabled() {
         return true;
+    }
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public Long getBusinessId() {
+        return this.businessId;
+    }
+
+    public Long getBranchId() {
+        return this.branchId;
+    }
+
+    public String getEmail() {
+        return this.email;
+    }
+
+    public Role getRole() {
+        return this.role;
     }
 }

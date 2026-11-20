@@ -9,7 +9,6 @@ import com.qrmenu.platform.servicerequest.entity.ServiceRequestStatus;
 import com.qrmenu.platform.servicerequest.repository.ServiceRequestRepository;
 import com.qrmenu.platform.table.entity.RestaurantTable;
 import com.qrmenu.platform.table.repository.RestaurantTableRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +18,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class ServiceRequestService {
 
     private final ServiceRequestRepository serviceRequestRepository;
     private final RestaurantTableRepository tableRepository;
     private final NotificationService notificationService;
+
+    public ServiceRequestService(ServiceRequestRepository serviceRequestRepository, RestaurantTableRepository tableRepository, NotificationService notificationService) {
+        this.serviceRequestRepository = serviceRequestRepository;
+        this.tableRepository = tableRepository;
+        this.notificationService = notificationService;
+    }
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 

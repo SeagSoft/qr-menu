@@ -5,17 +5,19 @@ import com.qrmenu.platform.business.dto.CreateBusinessRequest;
 import com.qrmenu.platform.business.dto.UpdateBusinessRequest;
 import com.qrmenu.platform.business.service.BusinessService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin/business")
-@RequiredArgsConstructor
 public class AdminBusinessController {
 
     private final BusinessService businessService;
+
+    public AdminBusinessController(BusinessService businessService) {
+        this.businessService = businessService;
+    }
 
     @PostMapping
     public ResponseEntity<BusinessDto> create(@Valid @RequestBody CreateBusinessRequest request) {

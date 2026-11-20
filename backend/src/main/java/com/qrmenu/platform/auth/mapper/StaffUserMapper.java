@@ -3,10 +3,11 @@ package com.qrmenu.platform.auth.mapper;
 import com.qrmenu.platform.auth.dto.RegisterStaffRequest;
 import com.qrmenu.platform.auth.dto.StaffUserDto;
 import com.qrmenu.platform.auth.entity.StaffUser;
+import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring", builder = @org.mapstruct.Builder(disableBuilder = true))
+@Mapper(componentModel = "spring", builder = @Builder(disableBuilder = true))
 public interface StaffUserMapper {
 
     @Mapping(source = "business.id", target = "businessId")

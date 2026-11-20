@@ -3,7 +3,6 @@ package com.qrmenu.platform.servicerequest.controller;
 import com.qrmenu.platform.servicerequest.dto.ServiceRequestResponse;
 import com.qrmenu.platform.servicerequest.entity.ServiceRequestStatus;
 import com.qrmenu.platform.servicerequest.service.ServiceRequestService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,10 +13,13 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/staff/branches/{branchId}/service-requests")
-@RequiredArgsConstructor
 public class StaffServiceRequestController {
 
     private final ServiceRequestService serviceRequestService;
+
+    public StaffServiceRequestController(ServiceRequestService serviceRequestService) {
+        this.serviceRequestService = serviceRequestService;
+    }
 
     @GetMapping
     public ResponseEntity<List<ServiceRequestResponse>> getActiveRequests(

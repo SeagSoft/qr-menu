@@ -1,8 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Eye, EyeOff, LogIn, Utensils, Sparkles, AlertCircle, CheckCircle2, ChefHat, LayoutDashboard } from 'lucide-react';
+import Link from 'next/link';
+import {
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  LogIn,
+  Utensils,
+  AlertCircle,
+  CheckCircle2,
+  Users,
+  Receipt,
+  ArrowLeft,
+  Lock,
+} from 'lucide-react';
+import { api, clearLegacyLocalStorageAuth } from '@/lib/api';
 
 export default function StaffLoginPage() {
   const router = useRouter();
@@ -12,6 +26,11 @@ export default function StaffLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [targetRouteLabel, setTargetRouteLabel] = useState('');
+
+  useEffect(() => {
+    clearLegacyLocalStorageAuth();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,205 +38,218 @@ export default function StaffLoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8080/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
+      const data = await api.login({ email: email.trim(), password: password.trim() });
+      const role = data.user?.role || 'WAITER';
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || 'Invalid email or password');
-      }
-
-      const data = await res.json();
-
-      // Store JWT token
       if (typeof window !== 'undefined') {
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('staffUser', JSON.stringify(data.user || data));
+        sessionStorage.setItem('token', data.accessToken);
+        sessionStorage.setItem('accessToken', data.accessToken);
+        sessionStorage.setItem('staffUser', JSON.stringify(data.user || data));
+        sessionStorage.setItem('qr_staff_session', 'ACTIVE');
+
+        if (role === 'CASHIER') {
+          sessionStorage.setItem('qr_cashier_session', 'ACTIVE');
+        } else if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'MANAGER') {
+          sessionStorage.setItem('qr_admin_session', 'ACTIVE');
+        }
       }
 
+      let targetPath = '/staff/orders';
+      let label = 'Garson Sipariş & Masa Ekranı (/staff/orders)';
+
+      if (role === 'WAITER') {
+        targetPath = '/staff/orders';
+        label = 'Garson Sipariş & Masa Ekranı (/staff/orders)';
+      } else if (role === 'CASHIER') {
+        targetPath = '/cashier';
+        label = 'Kasiyer Kasa Paneli (/cashier)';
+      } else if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'MANAGER') {
+        targetPath = '/admin/dashboard';
+        label = 'Yönetici Paneli (/admin/dashboard)';
+      } else if (role === 'KITCHEN') {
+        targetPath = '/kitchen?token=GOURMET-KDS-2026';
+        label = 'Mutfak Ekranı (/kitchen)';
+      }
+
+      setTargetRouteLabel(label);
       setLoginSuccess(true);
 
-      // Redirect based on role
       setTimeout(() => {
-        const role = data.user?.role || data.role || '';
-        if (role === 'KITCHEN_STAFF') {
-          router.push('/kitchen');
-        } else {
-          router.push('/admin');
-        }
-      }, 1200);
-
+        router.push(targetPath);
+      }, 900);
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      setError(err.message || 'Giriş başarısız. Lütfen e-posta ve şifre/PIN bilgilerinizi kontrol edin.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Demo login helper
-  const fillDemoCredentials = () => {
-    setEmail('admin@bosphorus.com');
-    setPassword('password123');
+  const fillRoleCredentials = (selectedRole: 'WAITER' | 'CASHIER' | 'ADMIN') => {
+    setError('');
+    if (selectedRole === 'WAITER') {
+      setEmail('waiter@gourmet.com');
+      setPassword('password123');
+    } else if (selectedRole === 'CASHIER') {
+      setEmail('cashier@gourmet.com');
+      setPassword('password123');
+    } else {
+      setEmail('admin@gourmet.com');
+      setPassword('password123');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex items-center justify-center relative overflow-hidden">
-      
-      {/* Background Glows */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-15%] w-[500px] h-[500px] bg-orange-500/8 rounded-full blur-[140px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-rose-500/8 rounded-full blur-[160px]" />
-        <div className="absolute top-[40%] left-[50%] translate-x-[-50%] w-[300px] h-[300px] bg-purple-500/5 rounded-full blur-[120px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] bg-purple-600/10 rounded-full blur-[140px]" />
       </div>
 
-      {/* Login Card */}
-      <div className="relative z-10 w-full max-w-md mx-4">
-        
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl gradient-btn text-white shadow-2xl shadow-orange-500/30 mb-5">
-            <Utensils className="w-8 h-8" />
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            <span className="gradient-text">GourmetQR</span>
-          </h1>
-          <p className="text-sm text-slate-400 mt-2">Staff Authentication Portal</p>
+      <div className="relative z-10 w-full max-w-md">
+        {/* Back to Operations Hub */}
+        <div className="mb-4">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition"
+          >
+            <ArrowLeft className="w-4 h-4" /> Operasyon Merkezine Dön
+          </Link>
         </div>
 
-        {/* Login Form Card */}
-        <div className="glass-panel p-8 rounded-3xl border border-slate-800 shadow-2xl">
-          
-          {/* Success State */}
-          {loginSuccess && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8" />
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-purple-600/20 border border-purple-500/30 text-purple-400 shadow-lg mb-3">
+            <Utensils className="w-7 h-7" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">
+            Personel Giriş Kapısı
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            Garsonlar Sipariş &amp; Masa ekranına, Kasiyerler Kasa paneline otomatik yönlendirilir
+          </p>
+        </div>
+
+        {/* Login Card */}
+        <div className="glass-panel p-7 rounded-3xl border border-zinc-800 bg-zinc-900/50 shadow-2xl">
+          {loginSuccess ? (
+            <div className="text-center py-8 space-y-3">
+              <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
               </div>
-              <h2 className="text-lg font-bold text-emerald-400">Login Successful!</h2>
-              <p className="text-xs text-slate-400 mt-2">Redirecting you to the operations panel...</p>
+              <h2 className="text-base font-bold text-emerald-400">Giriş Başarılı!</h2>
+              <p className="text-xs text-zinc-300">
+                Yönlendiriliyorsunuz: <span className="font-bold text-white">{targetRouteLabel}</span>
+              </p>
             </div>
-          )}
-
-          {/* Login Form */}
-          {!loginSuccess && (
+          ) : (
             <>
-              <div className="flex items-center gap-2 mb-6">
-                <ShieldCheck className="w-5 h-5 text-orange-400" />
-                <h2 className="text-lg font-bold text-white">Staff Sign In</h2>
+              <div className="flex items-center justify-between mb-5 pb-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-purple-400" />
+                  <h2 className="text-sm font-bold text-white">Kimlik Doğrulama</h2>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                  JWT Oturum
+                </span>
               </div>
 
-              {/* Error Alert */}
               {error && (
-                <div className="flex items-center gap-2 p-3 mb-5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <div className="flex items-center gap-2 p-3 mb-5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <form onSubmit={handleLogin} className="space-y-5">
-                {/* Email */}
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Email Address
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Personel E-Posta / Kullanıcı Adı
                   </label>
                   <input
                     id="login-email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="staff@restaurant.com"
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="ornek: waiter@gourmet.com"
                     required
-                    className="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-colors"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition"
                   />
                 </div>
 
-                {/* Password */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Password
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Şifre veya Güvenlik PIN Kodu
                   </label>
                   <div className="relative">
                     <input
                       id="login-password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Şifre veya 4 haneli PIN (örn: 1234)"
                       required
-                      className="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 transition-colors"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 pr-11 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Submit Button */}
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl gradient-btn text-white font-bold text-sm shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/25 transition disabled:opacity-50"
                 >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <LogIn className="w-4 h-4" />
-                  )}
-                  <span>{isLoading ? 'Authenticating...' : 'Sign In'}</span>
+                  <LogIn className="w-4 h-4" />
+                  <span>{isLoading ? 'Doğrulanıyor...' : 'Giriş Yap ve Panele Geç'}</span>
                 </button>
               </form>
 
-              {/* Divider */}
-              <div className="my-6 flex items-center gap-3">
-                <div className="flex-1 h-px bg-slate-800"></div>
-                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Quick Access</span>
-                <div className="flex-1 h-px bg-slate-800"></div>
-              </div>
+              {/* Quick Demo Role Selector */}
+              <div className="mt-6 pt-5 border-t border-zinc-800 space-y-2.5">
+                <span className="block text-[11px] font-bold text-zinc-400 text-center">
+                  Hızlı Test Girişi İçin Rol Seçin:
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fillRoleCredentials('WAITER')}
+                    className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-purple-500/40 text-center transition"
+                  >
+                    <Users className="w-4 h-4 text-purple-400 mx-auto mb-1" />
+                    <span className="block text-[11px] font-bold text-white">Garson</span>
+                    <span className="block text-[9px] text-zinc-500">Sipariş &amp; Masa</span>
+                  </button>
 
-              {/* Demo Credentials Helper */}
-              <button
-                type="button"
-                onClick={fillDemoCredentials}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition-all"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                Fill Demo Credentials
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => fillRoleCredentials('CASHIER')}
+                    className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-blue-500/40 text-center transition"
+                  >
+                    <Receipt className="w-4 h-4 text-blue-400 mx-auto mb-1" />
+                    <span className="block text-[11px] font-bold text-white">Kasiyer</span>
+                    <span className="block text-[9px] text-zinc-500">Kasa Paneli</span>
+                  </button>
 
-              {/* Quick Role Shortcuts */}
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => router.push('/kitchen')}
-                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-orange-400 hover:border-orange-500/30 text-xs font-bold transition-all"
-                >
-                  <ChefHat className="w-4 h-4" />
-                  Kitchen View
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push('/admin')}
-                  className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30 text-xs font-bold transition-all"
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Admin Panel
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => fillRoleCredentials('ADMIN')}
+                    className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-emerald-500/40 text-center transition"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                    <span className="block text-[11px] font-bold text-white">Yönetici</span>
+                    <span className="block text-[9px] text-zinc-500">Admin Panel</span>
+                  </button>
+                </div>
               </div>
             </>
           )}
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-[11px] text-slate-600 mt-6">
-          GourmetQR Platform • JWT Secured Staff Portal
-        </p>
       </div>
     </div>
   );

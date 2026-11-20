@@ -6,9 +6,9 @@ import {
   QrCode, Utensils, Users, ExternalLink, Plus, X,
   CheckCircle2, Clock, Flame, Trash2, DollarSign, TrendingUp, ShoppingBag,
   ArrowUpRight, Award, Shield, UserPlus, UserCheck, ChefHat, Lock, LogOut,
-  ShieldCheck, FolderPlus
+  ShieldCheck, FolderPlus, AlertCircle
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, clearAllAuthStorage, clearLegacyLocalStorageAuth } from '@/lib/api';
 import { MenuCategory, Product, RestaurantTable } from '@/lib/types';
 import { motion } from 'framer-motion';
 
@@ -203,13 +203,74 @@ export default function AdminDashboardPage() {
   const [prodTags, setProdTags] = useState('Chef Pick, Fresh');
 
   const [notification, setNotification] = useState<string | null>(null);
+  const [errorNotification, setErrorNotification] = useState<string | null>(null);
+
+  const showSuccess = (msg: string) => {
+    setErrorNotification(null);
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const showError = (msg: string) => {
+    setNotification(null);
+    setErrorNotification(msg);
+    setTimeout(() => setErrorNotification(null), 7000);
+  };
 
   useEffect(() => {
-    // Check if admin session exists in localStorage
-    const savedAdminSession = localStorage.getItem('qr_admin_session');
-    if (savedAdminSession === 'ACTIVE') {
+    clearLegacyLocalStorageAuth();
+    const savedAdminSession = sessionStorage.getItem('qr_admin_session');
+    const savedToken = sessionStorage.getItem('token');
+    if (savedAdminSession === 'ACTIVE' && savedToken) {
       setIsAdminAuthenticated(true);
+    } else {
+      setIsAdminAuthenticated(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+
+    const loadOrderHistoryFromBackend = async () => {
+      try {
+        const orders = await api.getBranchOrderHistory(1);
+        if (Array.isArray(orders)) {
+          const records = orders
+            .filter(o => o.status !== 'CANCELLED')
+            .map(o => {
+              const upperMethod = (o.paymentMethod || 'CARD').toUpperCase();
+              const paymentLabel =
+                upperMethod === 'COUNTER' || upperMethod === 'CASH'
+                  ? 'Cash / Counter'
+                  : upperMethod === 'DIGITAL_WALLET' || upperMethod === 'WALLET'
+                  ? 'Digital Wallet'
+                  : 'Credit Card';
+
+              return {
+                id: o.id,
+                orderNumber: o.orderNumber,
+                tableName: o.tableName || 'Table #01',
+                soldTime: o.createdAt
+                  ? new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Today',
+                soldDate: o.createdAt
+                  ? new Date(o.createdAt).toLocaleDateString()
+                  : 'Today',
+                itemsText: o.items
+                  ? o.items.map(i => `${i.quantity || 1}x ${i.productName}`).join(', ')
+                  : 'Order Items',
+                paymentMethod: paymentLabel,
+                tipAmount: Number(o.tipAmount || 0),
+                totalAmount: Number(o.totalAmount || 0),
+                status: o.status,
+              };
+            });
+          setLiveOrdersList(records);
+        }
+      } catch (reportErr) {
+        console.error('Failed to load order history from backend', reportErr);
+      }
+    };
 
     async function loadInitialData() {
       try {
@@ -224,54 +285,48 @@ export default function AdminDashboardPage() {
           setProdCategoryId(cats[0].id);
           const prods = await api.getProducts(cats[0].id);
           setProducts(prods);
+        } else {
+          setSelectedCategoryId(0);
+          setProdCategoryId(0);
+          setProducts([]);
         }
-      } catch (err) {
+
+        try {
+          const staffUsers = await api.getStaff(1);
+          if (Array.isArray(staffUsers) && staffUsers.length > 0) {
+            setStaffList(
+              staffUsers.map(u => ({
+                id: u.id,
+                name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
+                email: u.email,
+                role: (u.role === 'KITCHEN' || u.role === 'WAITER' || u.role === 'MANAGER') ? u.role : 'MANAGER',
+                pin: '1234',
+                isOnDuty: u.isActive ?? u.active ?? true,
+                joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'Active',
+              }))
+            );
+          }
+        } catch (staffErr) {
+          console.error('Failed to load staff from backend', staffErr);
+        }
+
+        await loadOrderHistoryFromBackend();
+      } catch (err: any) {
         console.error('Failed to load initial admin data', err);
+        showError(`Veriler yüklenirken hata oluştu: ${err.message}`);
       } finally {
         setLoadingTables(false);
       }
     }
     loadInitialData();
 
-    const loadRealCustomerOrdersForAdmin = () => {
-      const storedOrdersStr = typeof window !== 'undefined' ? localStorage.getItem('qr_all_orders') : null;
-      if (storedOrdersStr) {
-        try {
-          const ordersArr = JSON.parse(storedOrdersStr);
-          if (Array.isArray(ordersArr) && ordersArr.length > 0) {
-            const records = ordersArr.map((o: any) => {
-              const itemsStr = o.items ? o.items.map((i: any) => `${i.quantity || 1}x ${i.productName || i.name}`).join(', ') : 'Custom Meal';
-              return {
-                id: o.id || Date.now(),
-                orderNumber: o.orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-                tableName: o.tableName || 'Table #01',
-                soldTime: o.paidAt || o.soldTime || 'Just now',
-                soldDate: o.soldDate || 'Today',
-                itemsText: itemsStr,
-                paymentMethod: o.paymentMethod || 'Credit Card',
-                tipAmount: o.tipAmount || 0,
-                totalAmount: o.grandTotal || o.totalAmount || 100,
-                status: 'PAID'
-              };
-            });
-            setLiveOrdersList(records);
-          }
-        } catch (e) {
-          console.error('Failed to parse qr_all_orders for Admin', e);
-        }
-      }
-    };
-
-    loadRealCustomerOrdersForAdmin();
-
-    // Listen for live incoming customer orders and cross-tab storage updates
-    const handleLiveOrder = (e: any) => {
-      loadRealCustomerOrdersForAdmin();
+    const handleLiveOrder = () => {
+      loadOrderHistoryFromBackend();
     };
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'qr_all_orders' || e.key === 'qr_latest_order') {
-        loadRealCustomerOrdersForAdmin();
+        loadOrderHistoryFromBackend();
       }
     };
 
@@ -286,22 +341,28 @@ export default function AdminDashboardPage() {
         window.removeEventListener('storage', handleStorageChange);
       }
     };
-  }, []);
+  }, [isAdminAuthenticated]);
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPin === '9999' || adminPin === '1234' || adminPin === '0000') {
+    setAdminPinError(null);
+    try {
+      const authRes = await api.login({
+        email: 'admin@gourmet.com',
+        password: adminPin.trim(),
+      });
+      sessionStorage.setItem('token', authRes.accessToken);
+      sessionStorage.setItem('qr_admin_session', 'ACTIVE');
+      sessionStorage.setItem('staffUser', JSON.stringify(authRes.user));
       setIsAdminAuthenticated(true);
-      localStorage.setItem('qr_admin_session', 'ACTIVE');
-      setAdminPinError(null);
-    } else {
-      setAdminPinError('Invalid Admin Security PIN code. Default Admin PIN: 9999 or 1234');
+    } catch (err: any) {
+      setAdminPinError(err.message || 'Invalid Admin Security PIN code. Default Admin PIN: 9999 or 1234');
     }
   };
 
   const handleAdminLogout = () => {
+    clearAllAuthStorage();
     setIsAdminAuthenticated(false);
-    localStorage.removeItem('qr_admin_session');
     setAdminPin('');
   };
 
@@ -312,8 +373,9 @@ export default function AdminDashboardPage() {
       setLoadingMenu(true);
       const prods = await api.getProducts(catId);
       setProducts(prods);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load products for category', err);
+      showError(`Kategori ürünleri yüklenemedi: ${err.message}`);
     } finally {
       setLoadingMenu(false);
     }
@@ -328,20 +390,26 @@ export default function AdminDashboardPage() {
       const created = await api.createCategory({
         businessId: 1,
         name: newCategoryName.trim(),
-        description: newCategoryDesc.trim()
+        description: newCategoryDesc.trim(),
+        sortOrder: categories.length + 1
       });
 
-      setCategories(prev => [...prev, created]);
-      setSelectedCategoryId(created.id);
-      setProdCategoryId(created.id);
-      setProducts([]);
+      const refreshedCats = await api.getCategories(1);
+      setCategories(refreshedCats);
+
+      const newCatId = created.id;
+      setSelectedCategoryId(newCatId);
+      setProdCategoryId(newCatId);
+
+      const refreshedProds = await api.getProducts(newCatId);
+      setProducts(refreshedProds);
+
       setNewCategoryName('');
       setNewCategoryDesc('');
       setIsCreateCategoryModalOpen(false);
-      setNotification(`Successfully created new menu category "${created.name}"!`);
-      setTimeout(() => setNotification(null), 5000);
+      showSuccess(`Successfully created new menu category "${created.name}" (ID: #${newCatId})!`);
     } catch (err: any) {
-      alert(`Failed to create category: ${err.message}`);
+      showError(`Failed to create category: ${err.message}`);
     } finally {
       setCreatingCategory(false);
     }
@@ -354,13 +422,13 @@ export default function AdminDashboardPage() {
     try {
       setCreatingTable(true);
       const created = await api.createTable({ branchId: 1, tableNumber: newTableNumber.trim() });
-      setTables(prev => [created, ...prev]);
+      const refreshedTables = await api.getBranchTables(1);
+      setTables(refreshedTables);
       setNewTableNumber('');
       setIsCreateTableModalOpen(false);
-      setNotification(`Successfully created ${created.tableNumber || newTableNumber} with unique QR token!`);
-      setTimeout(() => setNotification(null), 5000);
+      showSuccess(`Successfully created Table ${created.tableNumber || newTableNumber} with unique QR token!`);
     } catch (err: any) {
-      alert(`Failed to create table: ${err.message}`);
+      showError(`Failed to create table: ${err.message}`);
     } finally {
       setCreatingTable(false);
     }
@@ -370,13 +438,19 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!prodName.trim() || !prodPrice || creatingProduct) return;
 
+    const targetCategoryId = prodCategoryId || selectedCategoryId;
+    if (!targetCategoryId || categories.length === 0) {
+      showError('Please create a menu category first before adding a product.');
+      return;
+    }
+
     try {
       setCreatingProduct(true);
       const priceNum = parseFloat(prodPrice);
       const tagsArray = prodTags.split(',').map(t => t.trim()).filter(Boolean);
 
       const created = await api.createProduct({
-        categoryId: prodCategoryId,
+        categoryId: targetCategoryId,
         name: prodName.trim(),
         description: prodDesc.trim(),
         price: priceNum,
@@ -386,19 +460,18 @@ export default function AdminDashboardPage() {
         tags: tagsArray.length > 0 ? tagsArray : ['Chef Special']
       });
 
-      if (created.categoryId === selectedCategoryId) {
-        setProducts(prev => [created, ...prev]);
-      }
+      setSelectedCategoryId(targetCategoryId);
+      const refreshedProducts = await api.getProducts(targetCategoryId);
+      setProducts(refreshedProducts);
 
       setProdName('');
       setProdDesc('');
       setProdPrice('');
       setProdImageUrl('');
       setIsCreateProductModalOpen(false);
-      setNotification(`Successfully added new product "${created.name}" ($${priceNum.toFixed(2)}) to menu!`);
-      setTimeout(() => setNotification(null), 5000);
+      showSuccess(`Successfully added new product "${created.name}" ($${priceNum.toFixed(2)}) to menu!`);
     } catch (err: any) {
-      alert(`Failed to create product: ${err.message}`);
+      showError(`Failed to create product: ${err.message}`);
     } finally {
       setCreatingProduct(false);
     }
@@ -409,64 +482,94 @@ export default function AdminDashboardPage() {
 
     try {
       await api.deleteProduct(productId);
-      setProducts(prev => prev.filter(p => p.id !== productId));
-      setNotification(`Successfully deleted "${productName}" from the menu.`);
-      setTimeout(() => setNotification(null), 5000);
+      const refreshedProducts = await api.getProducts(selectedCategoryId);
+      setProducts(refreshedProducts);
+      showSuccess(`Successfully deleted "${productName}" from the menu.`);
     } catch (err: any) {
-      alert(`Failed to delete product: ${err.message}`);
+      showError(`Failed to delete product: ${err.message}`);
     }
   };
 
-  useEffect(() => {
-    // Sync staff list to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('qr_staff_list', JSON.stringify(staffList));
-      window.dispatchEvent(new CustomEvent('qr_staff_updated', { detail: staffList }));
-    }
-  }, [staffList]);
-
-  const handleAddStaffMember = (e: React.FormEvent) => {
+  const handleAddStaffMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!staffName.trim() || !staffEmail.trim()) return;
 
-    const newStaff: StaffMember = {
-      id: Date.now(),
-      name: staffName.trim(),
-      email: staffEmail.trim(),
-      role: staffRole,
-      pin: staffPin.trim() || '1234',
-      isOnDuty: true,
-      joinedDate: 'Just now'
-    };
+    const nameParts = staffName.trim().split(/\s+/);
+    const firstName = nameParts[0] || 'Staff';
+    const lastName = nameParts.slice(1).join(' ') || 'Member';
 
-    setStaffList(prev => [newStaff, ...prev]);
-    setStaffName('');
-    setStaffEmail('');
-    setIsAddStaffModalOpen(false);
-    setNotification(`Successfully added new staff member "${newStaff.name}" (${newStaff.role})!`);
-    setTimeout(() => setNotification(null), 5000);
+    try {
+      const created = await api.createStaff({
+        businessId: 1,
+        branchId: 1,
+        email: staffEmail.trim(),
+        password: staffPin.trim() || '123456',
+        firstName,
+        lastName,
+        role: staffRole,
+      });
+
+      const newStaff: StaffMember = {
+        id: created.id,
+        name: `${created.firstName} ${created.lastName}`.trim(),
+        email: created.email,
+        role: staffRole,
+        pin: staffPin.trim() || '1234',
+        isOnDuty: created.isActive ?? true,
+        joinedDate: 'Just now'
+      };
+
+      setStaffList(prev => [newStaff, ...prev]);
+      setStaffName('');
+      setStaffEmail('');
+      setIsAddStaffModalOpen(false);
+      showSuccess(`Successfully added new staff member "${newStaff.name}" (${newStaff.role})!`);
+    } catch (err: any) {
+      showError(`Failed to add staff member: ${err.message}`);
+    }
   };
 
-  const handleToggleStaffDuty = (id: number) => {
-    setStaffList(prev => {
-      const updated = prev.map(s => s.id === id ? { ...s, isOnDuty: !s.isOnDuty } : s);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('qr_staff_list', JSON.stringify(updated));
-        window.dispatchEvent(new CustomEvent('qr_staff_updated', { detail: updated }));
-      }
-      return updated;
-    });
+  const handleToggleStaffDuty = async (id: number) => {
+    try {
+      const updatedUser = await api.toggleStaffStatus(id);
+      setStaffList(prev =>
+        prev.map(s =>
+          s.id === id
+            ? { ...s, isOnDuty: updatedUser.isActive ?? updatedUser.active ?? !s.isOnDuty }
+            : s
+        )
+      );
+    } catch (err: any) {
+      showError(`Failed to toggle staff duty status: ${err.message}`);
+    }
   };
 
-  const handleDeleteStaff = (id: number, name: string) => {
+  const handleDeleteStaff = async (id: number, name: string) => {
     if (!confirm(`Are you sure you want to remove staff member "${name}"?`)) return;
-    setStaffList(prev => prev.filter(s => s.id !== id));
-    setNotification(`Removed staff member "${name}".`);
-    setTimeout(() => setNotification(null), 5000);
+    try {
+      await api.deleteStaff(id);
+      setStaffList(prev => prev.filter(s => s.id !== id));
+      showSuccess(`Removed staff member "${name}".`);
+    } catch (err: any) {
+      showError(`Failed to remove staff member: ${err.message}`);
+    }
   };
 
-  const currentDataset = TIMEFRAME_DATASETS[salesTimeframe];
-  const combinedRecords = salesTimeframe === 'today' ? [...liveOrdersList, ...currentDataset.records] : currentDataset.records;
+  const baseDataset = TIMEFRAME_DATASETS[salesTimeframe];
+  const combinedRecords = liveOrdersList;
+  const dynamicGrossRevenue = combinedRecords.reduce((acc, r) => acc + Number(r.totalAmount || 0), 0);
+  const dynamicOrderCount = combinedRecords.length;
+  const dynamicAvgOrderValue = dynamicOrderCount > 0 ? dynamicGrossRevenue / dynamicOrderCount : 0;
+  const dynamicTips = combinedRecords.reduce((acc, r) => acc + Number(r.tipAmount || 0), 0);
+
+  const currentDataset: SalesTimeframeData = {
+    ...baseDataset,
+    grossRevenue: dynamicGrossRevenue,
+    orderCount: dynamicOrderCount,
+    avgOrderValue: dynamicAvgOrderValue,
+    tips: dynamicTips,
+    records: combinedRecords,
+  };
 
   // Render Admin PIN Security Lock Screen if not authenticated
   if (!isAdminAuthenticated) {
@@ -550,11 +653,14 @@ export default function AdminDashboardPage() {
                 <FolderPlus className="w-4 h-4" /> + Add Category
               </button>
               <button
+                disabled={categories.length === 0}
+                title={categories.length === 0 ? 'Önce bir menü kategorisi oluşturmalısınız' : 'Add New Menu Product'}
                 onClick={() => {
-                  setProdCategoryId(selectedCategoryId);
+                  if (categories.length === 0) return;
+                  setProdCategoryId(selectedCategoryId || categories[0].id);
                   setIsCreateProductModalOpen(true);
                 }}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-purple-600/30"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed disabled:shadow-none text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-purple-600/30"
               >
                 <Plus className="w-4 h-4" /> Add New Menu Product
               </button>
@@ -570,6 +676,16 @@ export default function AdminDashboardPage() {
             </button>
           )}
 
+          <a
+            href="/kitchen?token=GOURMET-KDS-2026"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+            title="Open Kitchen Display Kiosk with Kiosk Token"
+          >
+            <ChefHat className="w-4 h-4" /> Kitchen Kiosk
+          </a>
+
           <button
             onClick={handleAdminLogout}
             className="px-3.5 py-2 bg-zinc-900 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
@@ -580,11 +696,29 @@ export default function AdminDashboardPage() {
         </div>
       </header>
 
-      {/* Alert Notification */}
+      {/* Success Notification Banner */}
       {notification && (
-        <div className="my-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          {notification}
+        <div className="my-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center justify-between gap-2 shadow-lg">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{notification}</span>
+          </div>
+          <button onClick={() => setNotification(null)} className="text-emerald-400/70 hover:text-emerald-300">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Red Error Notification Banner / Toast */}
+      {errorNotification && (
+        <div className="my-4 p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-xs flex items-center justify-between gap-2 shadow-lg shadow-red-950/30">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span className="font-semibold">{errorNotification}</span>
+          </div>
+          <button onClick={() => setErrorNotification(null)} className="text-red-400/70 hover:text-red-300">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -940,67 +1074,91 @@ export default function AdminDashboardPage() {
             </button>
           </div>
 
-          {/* Category Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-2 border-b border-zinc-800">
-            {categories.map(cat => (
+          {categories.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-center space-y-3">
+              <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
+              <div>
+                <h4 className="font-bold text-white text-sm">Henüz Menü Kategorisi Bulunmuyor (0 Kategori)</h4>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Yeni ürün ekleyebilmek için önce en az bir menü kategorisi oluşturmanız gerekmektedir.
+                </p>
+              </div>
               <button
-                key={cat.id}
-                onClick={() => handleCategorySelect(cat.id)}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
-                  selectedCategoryId === cat.id
-                    ? 'bg-purple-600 text-white shadow-md border border-purple-500/40'
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
-                }`}
+                onClick={() => setIsCreateCategoryModalOpen(true)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition inline-flex items-center gap-1.5 shadow-lg shadow-purple-600/30"
               >
-                {cat.name}
+                <FolderPlus className="w-4 h-4" /> İlk Kategoriyi Oluştur
               </button>
-            ))}
-          </div>
-
-          {/* Products Grid */}
-          {loadingMenu ? (
-            <div className="text-center py-12 text-zinc-500 text-sm">Loading products for this category...</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {products.map(prod => (
-                <div key={prod.id} className="glass-card p-4 rounded-3xl border border-zinc-800 flex flex-col justify-between hover:border-purple-500/30 transition group">
-                  <div>
-                    <div className="relative">
-                      {prod.imageUrl ? (
-                        <img src={prod.imageUrl} alt={prod.name} className="w-full h-36 object-cover rounded-2xl mb-3 bg-zinc-900" />
-                      ) : (
-                        <div className="w-full h-36 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3">
-                          <Utensils className="w-8 h-8" />
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleDeleteProduct(prod.id, prod.name)}
-                        className="absolute top-2 right-2 p-2 rounded-xl bg-red-600/80 hover:bg-red-600 text-white shadow-lg backdrop-blur-md transition flex items-center gap-1 text-[11px] font-bold"
-                        title="Delete Product"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-base text-white">{prod.name}</h4>
-                      <span className="font-extrabold text-sm text-purple-400">${Number(prod.price || prod.basePrice || 0).toFixed(2)}</span>
-                    </div>
-                    {prod.description && <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{prod.description}</p>}
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" /> {prod.prepTimeMinutes || 15} mins
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Flame className="w-3.5 h-3.5 text-rose-400" /> {prod.calories || 500} kcal
-                    </span>
-                  </div>
-                </div>
-              ))}
             </div>
+          ) : (
+            <>
+              {/* Category Tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-2 border-b border-zinc-800">
+                {categories.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => handleCategorySelect(cat.id)}
+                    className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
+                      selectedCategoryId === cat.id
+                        ? 'bg-purple-600 text-white shadow-md border border-purple-500/40'
+                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Products Grid */}
+              {loadingMenu ? (
+                <div className="text-center py-12 text-zinc-500 text-sm">Loading products for this category...</div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500 text-sm glass-card rounded-3xl border border-zinc-800">
+                  Bu kategoride henüz ürün bulunmuyor. Üstteki &quot;Add New Menu Product&quot; butonuyla yeni ürün ekleyebilirsiniz.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {products.map(prod => (
+                    <div key={prod.id} className="glass-card p-4 rounded-3xl border border-zinc-800 flex flex-col justify-between hover:border-purple-500/30 transition group">
+                      <div>
+                        <div className="relative">
+                          {prod.imageUrl ? (
+                            <img src={prod.imageUrl} alt={prod.name} className="w-full h-36 object-cover rounded-2xl mb-3 bg-zinc-900" />
+                          ) : (
+                            <div className="w-full h-36 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-3">
+                              <Utensils className="w-8 h-8" />
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleDeleteProduct(prod.id, prod.name)}
+                            className="absolute top-2 right-2 p-2 rounded-xl bg-red-600/80 hover:bg-red-600 text-white shadow-lg backdrop-blur-md transition flex items-center gap-1 text-[11px] font-bold"
+                            title="Delete Product"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-bold text-base text-white">{prod.name}</h4>
+                          <span className="font-extrabold text-sm text-purple-400">${Number(prod.price || prod.basePrice || 0).toFixed(2)}</span>
+                        </div>
+                        {prod.description && <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{prod.description}</p>}
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-400" /> {prod.prepTimeMinutes || 15} mins
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Flame className="w-3.5 h-3.5 text-rose-400" /> {prod.calories || 500} kcal
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
       )}

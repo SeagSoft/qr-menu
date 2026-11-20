@@ -4,7 +4,6 @@ import com.qrmenu.platform.business.entity.Business;
 import com.qrmenu.platform.business.repository.BusinessRepository;
 import com.qrmenu.platform.common.context.TenantContext;
 import com.qrmenu.platform.common.exception.BusinessRuleException;
-import com.qrmenu.platform.common.exception.ResourceNotFoundException;
 import com.qrmenu.platform.menu.dto.CreateCategoryRequest;
 import com.qrmenu.platform.menu.dto.CreateProductRequest;
 import com.qrmenu.platform.menu.dto.MenuCategoryDto;

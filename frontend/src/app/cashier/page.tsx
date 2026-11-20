@@ -6,6 +6,14 @@ import {
   DollarSign, ShoppingBag, ShieldCheck, Printer, Utensils
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { api, clearAllAuthStorage, clearLegacyLocalStorageAuth } from '@/lib/api';
+
+function formatPaymentMethodLabel(method?: string): string {
+  const upper = (method || 'CARD').toUpperCase();
+  if (upper === 'COUNTER' || upper === 'CASH') return 'Cash / Counter';
+  if (upper === 'DIGITAL_WALLET' || upper === 'WALLET') return 'Digital Wallet';
+  return 'Credit Card';
+}
 
 interface ServedOrderRecord {
   id: number;
@@ -94,62 +102,69 @@ export default function CashierPortalPage() {
   const [cashierName, setCashierName] = useState('Sarah Jenkins (Cashier #01)');
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const [servedRecords, setServedRecords] = useState<ServedOrderRecord[]>(INITIAL_SERVED_RECORDS);
+  const [servedRecords, setServedRecords] = useState<ServedOrderRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReceipt, setSelectedReceipt] = useState<ServedOrderRecord | null>(null);
 
   useEffect(() => {
-    // Check if cashier session exists in localStorage
-    const savedSession = localStorage.getItem('qr_cashier_session');
-    if (savedSession) {
+    clearLegacyLocalStorageAuth();
+    const savedSession = sessionStorage.getItem('qr_cashier_session');
+    const savedToken = sessionStorage.getItem('token');
+    if (savedSession === 'ACTIVE' && savedToken) {
       setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
     }
+  }, []);
 
-    const loadRealCustomerOrders = () => {
-      const storedOrdersStr = typeof window !== 'undefined' ? localStorage.getItem('qr_all_orders') : null;
-      if (storedOrdersStr) {
-        try {
-          const ordersArr = JSON.parse(storedOrdersStr);
-          if (Array.isArray(ordersArr) && ordersArr.length > 0) {
-            const formattedRecords: ServedOrderRecord[] = ordersArr.map((o: any) => ({
-              id: o.id || Date.now(),
-              orderNumber: o.orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-              tableName: o.tableName || 'Table #01',
-              servedTime: o.paidAt || o.soldTime || 'Just now',
-              servedDate: o.soldDate || 'Today',
-              items: o.items ? o.items.map((i: any) => ({
-                name: i.productName || i.name || 'Menu Item',
-                quantity: i.quantity || 1,
-                unitPrice: i.unitPrice || 10
-              })) : [{ name: 'Chef Special Dish', quantity: 1, unitPrice: o.grandTotal || o.totalAmount || 50 }],
-              paymentMethod: o.paymentMethod || 'Credit Card',
-              subtotal: o.subtotal || o.totalAmount || 100,
-              tipAmount: o.tipAmount || 0,
-              totalAmount: o.grandTotal || o.totalAmount || 100,
-              status: 'SERVED'
-            }));
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
-            // Merge formatted customer orders with initial mock records uniquely by orderNumber
-            const recordMap = new Map<string, ServedOrderRecord>();
-            formattedRecords.forEach(r => recordMap.set(r.orderNumber, r));
-            INITIAL_SERVED_RECORDS.forEach(r => {
-              if (!recordMap.has(r.orderNumber)) {
-                recordMap.set(r.orderNumber, r);
-              }
+    const loadRealCustomerOrders = async () => {
+      try {
+        const ordersArr = await api.getBranchOrderHistory(1);
+        if (Array.isArray(ordersArr)) {
+          const formattedRecords: ServedOrderRecord[] = ordersArr
+            .filter(o => o.status !== 'CANCELLED')
+            .map(o => {
+              const tip = Number(o.tipAmount || 0);
+              const total = Number(o.totalAmount || 0);
+              const subtotal = Math.max(0, total - tip);
+              return {
+                id: o.id,
+                orderNumber: o.orderNumber,
+                tableName: o.tableName || 'Table #01',
+                servedTime: o.createdAt
+                  ? new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Just now',
+                servedDate: o.createdAt
+                  ? new Date(o.createdAt).toLocaleDateString()
+                  : 'Today',
+                items: Array.isArray(o.items)
+                  ? o.items.map(i => ({
+                      name: i.productName || 'Menu Item',
+                      quantity: i.quantity || 1,
+                      unitPrice: Number(i.unitPrice || 0),
+                    }))
+                  : [],
+                paymentMethod: formatPaymentMethodLabel(o.paymentMethod),
+                subtotal,
+                tipAmount: tip,
+                totalAmount: total,
+                status: 'SERVED',
+              };
             });
-
-            setServedRecords(Array.from(recordMap.values()));
-          }
-        } catch (e) {
-          console.error('Failed to parse qr_all_orders', e);
+          setServedRecords(formattedRecords);
         }
+      } catch (e) {
+        console.error('Failed to fetch order history from backend for Cashier', e);
       }
     };
 
     loadRealCustomerOrders();
 
     // Listen for live served orders in same tab and cross-tab storage changes
-    const handleNewServedOrder = (e: any) => {
+    const handleNewServedOrder = () => {
       loadRealCustomerOrders();
     };
 
@@ -170,45 +185,33 @@ export default function CashierPortalPage() {
         window.removeEventListener('storage', handleStorageChange);
       }
     };
-  }, []);
+  }, [isAuthenticated]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
     const pin = cashierPin.trim();
-    const storedRosterStr = typeof window !== 'undefined' ? localStorage.getItem('qr_staff_list') : null;
-    const roster = storedRosterStr ? JSON.parse(storedRosterStr) : [
-      { name: 'Gordon Ramsay', pin: '1234', isOnDuty: true },
-      { name: 'Alex Morgan', pin: '2345', isOnDuty: true },
-      { name: 'Marco Pierre', pin: '3456', isOnDuty: false },
-      { name: 'Sarah Jenkins', pin: '4567', isOnDuty: true }
-    ];
 
-    const foundMember = roster.find((s: any) => s.pin === pin);
-
-    if (foundMember) {
-      if (!foundMember.isOnDuty) {
-        setLoginError(`⛔ Access Denied: Staff member "${foundMember.name}" is currently OFF DUTY. Ask your manager to activate your shift in the Admin Panel.`);
-        return;
+    try {
+      const authRes = await api.login({
+        email: 'waiter@gourmet.com',
+        password: pin,
+      });
+      sessionStorage.setItem('token', authRes.accessToken);
+      sessionStorage.setItem('qr_cashier_session', 'ACTIVE');
+      sessionStorage.setItem('staffUser', JSON.stringify(authRes.user));
+      if (authRes.user) {
+        setCashierName(`${authRes.user.firstName} ${authRes.user.lastName} (${authRes.user.role})`);
       }
       setIsAuthenticated(true);
-      localStorage.setItem('qr_cashier_session', 'ACTIVE');
-      setLoginError(null);
-      return;
+    } catch (err: any) {
+      setLoginError(err.message || 'Invalid Cashier PIN code. Try default PIN: 1234');
     }
-
-    if (['9999', '0000'].includes(pin)) {
-      setIsAuthenticated(true);
-      localStorage.setItem('qr_cashier_session', 'ACTIVE');
-      setLoginError(null);
-      return;
-    }
-
-    setLoginError('Invalid Cashier PIN code. Try default PIN: 1234');
   };
 
   const handleLogout = () => {
+    clearAllAuthStorage();
     setIsAuthenticated(false);
-    localStorage.removeItem('qr_cashier_session');
     setCashierPin('');
   };
 

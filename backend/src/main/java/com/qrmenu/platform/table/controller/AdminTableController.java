@@ -5,7 +5,6 @@ import com.qrmenu.platform.table.dto.RestaurantTableDto;
 import com.qrmenu.platform.table.dto.UpdateTableRequest;
 import com.qrmenu.platform.table.service.RestaurantTableService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +13,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/tables")
-@RequiredArgsConstructor
 public class AdminTableController {
 
     private final RestaurantTableService tableService;
+
+    public AdminTableController(RestaurantTableService tableService) {
+        this.tableService = tableService;
+    }
 
     @PostMapping
     public ResponseEntity<RestaurantTableDto> create(@Valid @RequestBody CreateTableRequest request) {

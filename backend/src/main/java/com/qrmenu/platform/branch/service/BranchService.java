@@ -9,19 +9,23 @@ import com.qrmenu.platform.branch.repository.BranchRepository;
 import com.qrmenu.platform.business.entity.Business;
 import com.qrmenu.platform.business.repository.BusinessRepository;
 import com.qrmenu.platform.common.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class BranchService {
 
     private final BranchRepository branchRepository;
     private final BusinessRepository businessRepository;
     private final BranchMapper branchMapper;
+
+    public BranchService(BranchRepository branchRepository, BusinessRepository businessRepository, BranchMapper branchMapper) {
+        this.branchRepository = branchRepository;
+        this.businessRepository = businessRepository;
+        this.branchMapper = branchMapper;
+    }
 
     @Transactional(readOnly = true)
     public BranchDto getById(Long id) {

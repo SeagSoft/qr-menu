@@ -119,6 +119,8 @@ export interface Order {
   branchName?: string;
   status: OrderStatus;
   totalAmount: number;
+  paymentMethod?: string;
+  tipAmount?: number;
   notes?: string;
   items: OrderItem[];
   createdAt: string;
@@ -139,16 +141,31 @@ export interface ServiceRequest {
   resolvedAt?: string;
 }
 
+export interface StaffUser {
+  id: number;
+  businessId: number;
+  branchId?: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'WAITER' | 'CASHIER' | 'KITCHEN';
+  isActive?: boolean;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SalesReport {
+  branchId: number;
+  grossRevenue: number;
+  orderCount: number;
+  avgOrderValue: number;
+  activeOrderCount: number;
+  orders: Order[];
+}
+
 export interface AuthResponse {
   accessToken: string;
   tokenType: string;
-  user: {
-    id: number;
-    businessId: number;
-    branchId?: number;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'WAITER' | 'KITCHEN';
-  };
+  user: StaffUser;
 }

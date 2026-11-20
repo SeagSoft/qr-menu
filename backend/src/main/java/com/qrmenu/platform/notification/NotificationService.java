@@ -2,8 +2,6 @@ package com.qrmenu.platform.notification;
 
 import com.qrmenu.platform.ordering.dto.OrderResponse;
 import com.qrmenu.platform.servicerequest.dto.ServiceRequestResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -12,11 +10,13 @@ import org.springframework.stereotype.Service;
  * to WebSocket subscribers (Kitchen, Staff, Customer screens).
  */
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class NotificationService {
-
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NotificationService.class);
     private final SimpMessagingTemplate messagingTemplate;
+
+    public NotificationService(SimpMessagingTemplate messagingTemplate) {
+        this.messagingTemplate = messagingTemplate;
+    }
 
     /**
      * Notify kitchen display of a new or updated order.

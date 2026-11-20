@@ -190,6 +190,8 @@ export default function CustomerTablePage({ params }: { params: Promise<{ token:
 
       const orderResult = await api.submitOrder(qrToken, {
         items: itemsPayload,
+        paymentMethod,
+        tipAmount: Number(tipAmount.toFixed(2)),
         notes: `Paid via ${paymentMethod} (Tip: ${tipPercentage}%)`,
       });
 

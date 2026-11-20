@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
-import { MOCK_ORDERS } from '@/lib/mockData';
 import { Order, OrderStatus } from '@/lib/types';
-import { fetchActiveKitchenOrders, updateOrderStatusInBackend } from '@/lib/api';
+import { api, clearAllAuthStorage, clearLegacyLocalStorageAuth, fetchActiveKitchenOrders, updateOrderStatusInBackend } from '@/lib/api';
 import { ShoppingBag, Clock, CheckCircle2, Play, Check, Filter, Search, Lock, LogOut, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -13,66 +12,58 @@ export default function StaffOrdersPage() {
   const [staffPin, setStaffPin] = useState('');
   const [staffPinError, setStaffPinError] = useState<string | null>(null);
 
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   useEffect(() => {
-    // Check staff session in localStorage
-    const savedStaffSession = localStorage.getItem('qr_staff_session');
-    if (savedStaffSession === 'ACTIVE') {
+    clearLegacyLocalStorageAuth();
+    const savedStaffSession = sessionStorage.getItem('qr_staff_session');
+    const savedToken = sessionStorage.getItem('token');
+    if (savedStaffSession === 'ACTIVE' && savedToken) {
       setIsStaffAuthenticated(true);
+    } else {
+      setIsStaffAuthenticated(false);
     }
   }, []);
 
   const loadOrders = async () => {
-    const apiOrders = await fetchActiveKitchenOrders(1);
-    if (apiOrders && Array.isArray(apiOrders)) {
-      setOrders(apiOrders);
+    try {
+      const apiOrders = await fetchActiveKitchenOrders(1);
+      if (apiOrders && Array.isArray(apiOrders)) {
+        setOrders(apiOrders);
+      }
+    } catch (err) {
+      console.error('Failed to load staff orders', err);
     }
   };
 
   useEffect(() => {
+    if (!isStaffAuthenticated) return;
     loadOrders();
-  }, []);
+  }, [isStaffAuthenticated]);
 
-  const handleStaffLogin = (e: React.FormEvent) => {
+  const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setStaffPinError(null);
     const pin = staffPin.trim();
-    const storedRosterStr = typeof window !== 'undefined' ? localStorage.getItem('qr_staff_list') : null;
-    const roster = storedRosterStr ? JSON.parse(storedRosterStr) : [
-      { name: 'Gordon Ramsay', pin: '1234', isOnDuty: true },
-      { name: 'Alex Morgan', pin: '2345', isOnDuty: true },
-      { name: 'Marco Pierre', pin: '3456', isOnDuty: false },
-      { name: 'Sarah Jenkins', pin: '4567', isOnDuty: true }
-    ];
-
-    const foundMember = roster.find((s: any) => s.pin === pin);
-
-    if (foundMember) {
-      if (!foundMember.isOnDuty) {
-        setStaffPinError(`⛔ Access Denied: Staff member "${foundMember.name}" is currently OFF DUTY. Ask your manager to activate your shift in the Admin Panel.`);
-        return;
-      }
+    try {
+      const authRes = await api.login({
+        email: 'waiter@gourmet.com',
+        password: pin,
+      });
+      sessionStorage.setItem('token', authRes.accessToken);
+      sessionStorage.setItem('qr_staff_session', 'ACTIVE');
+      sessionStorage.setItem('staffUser', JSON.stringify(authRes.user));
       setIsStaffAuthenticated(true);
-      localStorage.setItem('qr_staff_session', 'ACTIVE');
-      setStaffPinError(null);
-      return;
+    } catch (err: any) {
+      setStaffPinError(err.message || 'Invalid Staff PIN code. Default Staff PIN: 1234');
     }
-
-    if (['9999', '0000'].includes(pin)) {
-      setIsStaffAuthenticated(true);
-      localStorage.setItem('qr_staff_session', 'ACTIVE');
-      setStaffPinError(null);
-      return;
-    }
-
-    setStaffPinError('Invalid Staff PIN code. Default Staff PIN: 1234');
   };
 
   const handleStaffLogout = () => {
+    clearAllAuthStorage();
     setIsStaffAuthenticated(false);
-    localStorage.removeItem('qr_staff_session');
     setStaffPin('');
   };
 
@@ -86,7 +77,7 @@ export default function StaffOrdersPage() {
   const filteredOrders = orders.filter(o => {
     const matchesStatus = filterStatus === 'ALL' || o.status === filterStatus;
     const matchesSearch = o.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          o.tableName.toLowerCase().includes(searchTerm.toLowerCase());
+      o.tableName.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -183,11 +174,10 @@ export default function StaffOrdersPage() {
                 <button
                   key={status}
                   onClick={() => setFilterStatus(status)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    filterStatus === status
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterStatus === status
                       ? 'gradient-btn text-white shadow'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
+                    }`}
                 >
                   {status}
                 </button>

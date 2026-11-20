@@ -5,7 +5,6 @@ import com.qrmenu.platform.branch.dto.CreateBranchRequest;
 import com.qrmenu.platform.branch.dto.UpdateBranchRequest;
 import com.qrmenu.platform.branch.service.BranchService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +13,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
-@RequiredArgsConstructor
 public class AdminBranchController {
 
     private final BranchService branchService;
+
+    public AdminBranchController(BranchService branchService) {
+        this.branchService = branchService;
+    }
 
     @PostMapping("/branches")
     public ResponseEntity<BranchDto> create(@Valid @RequestBody CreateBranchRequest request) {

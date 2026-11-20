@@ -2,10 +2,11 @@ package com.qrmenu.platform.common.config;
 
 import com.qrmenu.platform.auth.jwt.JwtAuthenticationEntryPoint;
 import com.qrmenu.platform.auth.jwt.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -22,27 +23,33 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+            .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints
+                // Allow all CORS preflight OPTIONS requests
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Public customer QR endpoints & auth login/register
                 .requestMatchers("/api/public/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
-                // Admin & Staff endpoints (open for demo/dev mode)
-                .requestMatchers("/api/admin/**").permitAll()
-                .requestMatchers("/api/staff/**").permitAll()
                 // WebSocket
                 .requestMatchers("/ws/**").permitAll()
                 // Swagger/OpenAPI
@@ -51,8 +58,9 @@ public class SecurityConfig {
                 .requestMatchers("/h2-console/**").permitAll()
                 // Health check
                 .requestMatchers("/actuator/health").permitAll()
-                // WebSocket
-                .requestMatchers("/ws/**").permitAll()
+                // Protected Admin & Staff endpoints require valid JWT authentication
+                .requestMatchers("/api/admin/**").authenticated()
+                .requestMatchers("/api/staff/**").authenticated()
                 // Everything else requires authentication
                 .anyRequest().authenticated()
             )

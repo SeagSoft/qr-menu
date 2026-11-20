@@ -12,7 +12,6 @@ import com.qrmenu.platform.menu.mapper.MenuCategoryMapper;
 import com.qrmenu.platform.menu.mapper.ProductMapper;
 import com.qrmenu.platform.menu.repository.MenuCategoryRepository;
 import com.qrmenu.platform.menu.repository.ProductRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class MenuService {
 
     private final MenuCategoryRepository categoryRepository;
@@ -29,12 +27,30 @@ public class MenuService {
     private final MenuCategoryMapper categoryMapper;
     private final ProductMapper productMapper;
 
+    public MenuService(
+            MenuCategoryRepository categoryRepository,
+            ProductRepository productRepository,
+            BusinessRepository businessRepository,
+            MenuCategoryMapper categoryMapper,
+            ProductMapper productMapper
+    ) {
+        this.categoryRepository = categoryRepository;
+        this.productRepository = productRepository;
+        this.businessRepository = businessRepository;
+        this.categoryMapper = categoryMapper;
+        this.productMapper = productMapper;
+    }
+
     // --- Category Management ---
 
     @Transactional(readOnly = true)
     public List<MenuCategoryDto> getCategoriesByBusinessId(Long businessId) {
-        verifyTenantAccess(businessId);
-        return categoryRepository.findByBusinessIdOrderBySortOrderAsc(businessId)
+        Business business = businessRepository.findById(businessId)
+                .or(() -> businessRepository.findAll().stream().findFirst())
+                .orElseThrow(() -> new ResourceNotFoundException("Business", businessId));
+
+        verifyTenantAccess(business.getId());
+        return categoryRepository.findByBusinessIdOrderBySortOrderAsc(business.getId())
                 .stream()
                 .map(categoryMapper::toDto)
                 .toList();
@@ -49,7 +65,13 @@ public class MenuService {
         }
 
         Business business = businessRepository.findById(request.getBusinessId())
+                .or(() -> businessRepository.findAll().stream().findFirst())
                 .orElseThrow(() -> new ResourceNotFoundException("Business", request.getBusinessId()));
+
+        if (!business.getId().equals(request.getBusinessId()) &&
+                categoryRepository.existsByBusinessIdAndName(business.getId(), request.getName())) {
+            throw new BusinessRuleException("DUPLICATE_CATEGORY_NAME", "Category name already exists: " + request.getName());
+        }
 
         MenuCategory category = categoryMapper.toEntity(request);
         category.setBusiness(business);

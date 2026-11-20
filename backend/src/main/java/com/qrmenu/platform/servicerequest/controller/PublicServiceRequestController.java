@@ -4,7 +4,6 @@ import com.qrmenu.platform.servicerequest.dto.CreateServiceRequest;
 import com.qrmenu.platform.servicerequest.dto.ServiceRequestResponse;
 import com.qrmenu.platform.servicerequest.service.ServiceRequestService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +13,13 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/public/tables/{token}/service-requests")
-@RequiredArgsConstructor
 public class PublicServiceRequestController {
 
     private final ServiceRequestService serviceRequestService;
+
+    public PublicServiceRequestController(ServiceRequestService serviceRequestService) {
+        this.serviceRequestService = serviceRequestService;
+    }
 
     @PostMapping
     public ResponseEntity<ServiceRequestResponse> createServiceRequest(
